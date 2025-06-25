@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dynamic OpenSeadragon Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
+  <style>
+    body {
+      margin: 0; padding: 10px; font-family: Arial, sans-serif;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+    #selector {
+      margin-bottom: 10px;
+      font-size: 16px;
+      padding: 5px;
+      width: 250px;
+    }
+    #viewer {
+      flex-grow: 1;
+      border: 1px solid #333;
+    }
+  </style>
+</head>
+<body>
+
+  <select id="selector" aria-label="Select image to view">
+    <option>Loading images...</option>
+  </select>
+
+  <div id="viewer"></div>
+
+  <script>
+    const selector = document.getElementById('selector');
+    let viewer;
+
+    fetch('images.json')
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to load images.json');
+        return response.json();
+      })
+      .then(images => {
+        // Clear "Loading images..." placeholder
+        selector.innerHTML = '';
+
+        if (!images.length) {
+          selector.innerHTML = '<option>No images found</option>';
+          return;
+        }
+
+        // Populate dropdown
+        images.forEach((image, i) => {
+          const option = document.createElement('option');
+          option.value = image;
+          option.text = image.split('/').pop().replace('.dzi', '').replace(/_/g, ' ');
+          selector.appendChild(option);
+        });
+
+        // Initialize OpenSeadragon with first image
+        viewer = OpenSeadragon({
+          id: "viewer",
+          prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
+          tileSources: images[0],
+          showNavigator: true,
+          animationTime: 0.5,
+          blendTime: 0.1,
+          constrainDuringPan: true,
+          maxZoomPixelRatio: 2,
+          minZoomLevel: 1,
+          visibilityRatio: 1,
+          zoomPerClick: 2,
+        });
+      })
+      .catch(error => {
+        selector.innerHTML = `<option>Error loading images</option>`;
+        console.error(error);
+      });
+
+    selector.addEventListener('change', () => {
+      if (viewer) {
+        viewer.open(selector.value);
+      }
+    });
+  </script>
+
+</body>
+</html>
+

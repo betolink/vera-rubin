@@ -7,32 +7,58 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body { background: black; color: white; font-family: sans-serif; margin: 0; padding: 0; }
-    #viewer { height: 50vh; margin: 20px 0; }
-    #controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5em; padding: 1em; text-align: center; }
-    #selector, #platesolve-btn, #save-api-key, #api-key { padding: 0.3em 0.6em; font-size: 0.9em; }
-    #selector, #platesolve-btn, #save-api-key { width: auto; }
-    #api-key { width: 320px; max-width: 90vw; }
-    #status { font-size: 0.85em; margin-top: 0.5em; flex-basis: 100%; text-align: center; }
-    #results { background: #111; padding: 1em; border-radius: 8px; display: none; position: absolute; top: 1em; right: 1em; max-width: 90vw; box-sizing: border-box; z-index: 1000; }
-    @media (max-width: 600px) {
-      #viewer { height: 40vh; }
-      #controls { flex-direction: column; }
+
+    html,body{margin:0;padding:0;height:100%;width:100%;overflow:hidden;background:black;color:white;font-family:sans-serif;}
+    #viewer{position:fixed;top:0;left:0;right:0;bottom:0;width:100vw;height:100vh;background:black;z-index:0;}
+
+    #header {
+      position: fixed;
+      bottom: 10px; /* Increased from 1px for better visibility */
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 800px;
+      background: rgba(0,0,0,0.75);
+      color: white;
+      padding: 1em 1.5em;
+      border-radius: 8px;
+      z-index: 1001;
+      text-align: center;
+      font-weight: 600;
+      /* Removed duplicate position:relative */
+      box-sizing: border-box; /* Ensures padding is included in width */
     }
 
-    /* body { background: black; color: white; font-family: sans-serif; margin: 0; padding: 0; } */
-    /* #viewer { height: 500px; margin: 20px 0; } */
-    /* #controls { display: flex; gap: 1em; align-items: center; padding: 1em; } */
-    /* #selector { padding: 0.5em; } */
-    /* #platesolve-btn { padding: 0.5em 1em; } */
-    /* #results { background: #111; padding: 1em; border-radius: 8px; display: none; position: absolute; top: 1em; right: 1em; max-width: 300px; z-index: 1000; } */
+    #header p {
+      font-size: 0.75em;
+      margin-top: 0.25em;
+    }
+
+    #close-header {
+      position: absolute;
+      top: 0.3em;
+      right: 0.5em;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 1.2em;
+      cursor: pointer;
+    }
+
+    #controls{position:fixed;top:3.5em;left:50%;transform:translateX(-50%);display:flex;gap:0.5em;align-items:center;background:rgba(0,0,0,0.6);padding:0.5em 1em;border-radius:8px;z-index:1000;flex-wrap:wrap;max-width:95vw;justify-content:center;}
+    #api-key{width:280px;max-width:60vw;padding:0.3em 0.6em;font-size:0.9em;}
+    #selector,#platesolve-btn,#save-api-key{padding:0.3em 0.6em;font-size:0.9em;width:auto;}
+    #status { position: fixed; bottom: 5.5em; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 0.5em 1em; border-radius: 8px; font-size: 0.85em; z-index: 1000; max-width: 90vw; text-align: center; pointer-events: none; }
+
   </style>
 </head>
 <body>
-  <header style="text-align: center; padding: 1em;">
-      <h2><i class="fas fa-star"></i><a href="https://rubinobservatory.org/"> Vera C. Rubin Image Viewer</a></h2>
-      <p class="subtitle">🔍 Zoom in any part of the image! 🛰️ To find astronomical coordinates, enable Plate Solving, then click on the image to analyze it with <a href="https://nova.astrometry.net/api_help" target="_blank">Astrometry.net API</a></p>
-  </header>
+  <div id="header">
+    <button id="close-header" aria-label="Close header" title="Close" style="position:absolute; top:0.3em; right:0.5em; background:none; border:none; color:white; font-size:1.2em; cursor:pointer;">✕</button>
+    <h2><i class="fas fa-star"></i> <a href="https://rubinobservatory.org/">Vera C. Rubin Image Viewer</a></h2>
+    <p>🔍 Zoom in any part of the image! 🛰️ To find astronomical coordinates, enable Plate Solving, then click on the image to analyze it with <a href="https://nova.astrometry.net/api_help" target="_blank">Astrometry.net API</a></p>
+    <p>If you like this, consider a <a target="_blank" href="https://www.healpalestine.org/donate/">donation</a></p>
+  </div>    
 
   <div id="controls">
     <select id="selector" aria-label="Select image to view">
@@ -55,6 +81,10 @@
     const apiKeyInput = document.getElementById('api-key');
     const saveApiKeyBtn = document.getElementById('save-api-key');
     let viewer, plateSolvingEnabled = false, currentImageSource;
+
+    document.getElementById('close-header').addEventListener('click', () => {
+     document.getElementById('header').style.display = 'none';
+    });
 
     fetch('images.json')
       .then(response => {
@@ -198,9 +228,6 @@
       if (apiKey) status.textContent = 'API key saved.';
     });
   </script>
-  <div style="text-align: center; padding-right: 40px;">
-    <h4>If you like this, consider a <a target="_blank" href="https://www.healpalestine.org/donate/">donation</a></h4>
-  </div>    
 </body>
 </html>
 

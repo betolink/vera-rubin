@@ -3,36 +3,58 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dynamic OpenSeadragon Viewer</title>
+  <title>Vera C. Rubin Image Viewer with Plate Solving</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/openseadragon.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    body {
-      margin: 0; padding: 10px; font-family: Arial, sans-serif;
-      display: flex; flex-direction: column; height: 100vh;
+    body { background: black; color: white; font-family: sans-serif; margin: 0; padding: 0; }
+    #viewer { height: 50vh; margin: 20px 0; }
+    #controls { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.5em; padding: 1em; text-align: center; }
+    #selector, #platesolve-btn, #save-api-key, #api-key { padding: 0.3em 0.6em; font-size: 0.9em; }
+    #selector, #platesolve-btn, #save-api-key { width: auto; }
+    #api-key { width: 320px; max-width: 90vw; }
+    #status { font-size: 0.85em; margin-top: 0.5em; flex-basis: 100%; text-align: center; }
+    #results { background: #111; padding: 1em; border-radius: 8px; display: none; position: absolute; top: 1em; right: 1em; max-width: 90vw; box-sizing: border-box; z-index: 1000; }
+    @media (max-width: 600px) {
+      #viewer { height: 40vh; }
+      #controls { flex-direction: column; }
     }
-    #selector {
-      margin-bottom: 10px;
-      font-size: 16px;
-      padding: 5px;
-      width: 250px;
-    }
-    #viewer {
-      flex-grow: 1;
-      border: 1px solid #333;
-    }
+
+    /* body { background: black; color: white; font-family: sans-serif; margin: 0; padding: 0; } */
+    /* #viewer { height: 500px; margin: 20px 0; } */
+    /* #controls { display: flex; gap: 1em; align-items: center; padding: 1em; } */
+    /* #selector { padding: 0.5em; } */
+    /* #platesolve-btn { padding: 0.5em 1em; } */
+    /* #results { background: #111; padding: 1em; border-radius: 8px; display: none; position: absolute; top: 1em; right: 1em; max-width: 300px; z-index: 1000; } */
   </style>
 </head>
 <body>
+  <header style="text-align: center; padding: 1em;">
+      <h2><i class="fas fa-star"></i><a href="https://rubinobservatory.org/"> Vera C. Rubin Image Viewer</a></h2>
+      <p class="subtitle">🔍 Zoom in any part of the image! 🛰️ To find astronomical coordinates, enable Plate Solving, then click on the image to analyze it with <a href="https://nova.astrometry.net/api_help" target="_blank">Astrometry.net API</a></p>
+  </header>
 
-  <select id="selector" aria-label="Select image to view">
-    <option>Loading images...</option>
-  </select>
+  <div id="controls">
+    <select id="selector" aria-label="Select image to view">
+      <option>Loading images...</option>
+    </select>
+    <button id="platesolve-btn" disabled><i class="fas fa-crosshairs"></i> Enable Plate Solving</button>
+    <input type="text" id="api-key" placeholder="Enter your Astrometry.net API key">
+    <button id="save-api-key"><i class="fas fa-save"></i> Save API Key</button>
+    <span id="status">Waiting for a scene to analyze...</span>
+  </div>
 
   <div id="viewer"></div>
+  <div id="results"></div>
 
   <script>
     const selector = document.getElementById('selector');
-    let viewer;
+    const plateSolveBtn = document.getElementById('platesolve-btn');
+    const status = document.getElementById('status');
+    const resultsDiv = document.getElementById('results');
+    const apiKeyInput = document.getElementById('api-key');
+    const saveApiKeyBtn = document.getElementById('save-api-key');
+    let viewer, plateSolvingEnabled = false, currentImageSource;
 
     fetch('images.json')
       .then(response => {
@@ -40,27 +62,25 @@
         return response.json();
       })
       .then(images => {
-        // Clear "Loading images..." placeholder
         selector.innerHTML = '';
-
         if (!images.length) {
           selector.innerHTML = '<option>No images found</option>';
           return;
         }
 
-        // Populate dropdown
-        images.forEach((image, i) => {
+        images.forEach(image => {
           const option = document.createElement('option');
           option.value = image;
           option.text = image.split('/').pop().replace('.dzi', '').replace(/_/g, ' ');
           selector.appendChild(option);
         });
 
-        // Initialize OpenSeadragon with first image
+        currentImageSource = images[0];
         viewer = OpenSeadragon({
           id: "viewer",
           prefixUrl: "https://cdnjs.cloudflare.com/ajax/libs/openseadragon/4.1.0/images/",
-          tileSources: images[0],
+          tileSources: currentImageSource,
+          crossOriginPolicy: 'Anonymous',
           showNavigator: true,
           animationTime: 0.5,
           blendTime: 0.1,
@@ -70,6 +90,9 @@
           visibilityRatio: 1,
           zoomPerClick: 2,
         });
+
+        setupPlateSolving();
+        plateSolveBtn.disabled = false;
       })
       .catch(error => {
         selector.innerHTML = `<option>Error loading images</option>`;
@@ -78,11 +101,106 @@
 
     selector.addEventListener('change', () => {
       if (viewer) {
+        currentImageSource = selector.value;
         viewer.open(selector.value);
       }
     });
-  </script>
 
+    function setupPlateSolving() {
+      viewer.addHandler('canvas-click', async function(event) {
+        if (!plateSolvingEnabled) return;
+        event.preventDefaultAction = true;
+        status.textContent = 'Extracting tile from image...';
+
+        const img = await viewer.drawer.canvas.toDataURL('image/jpeg');
+        const imageBlob = await fetch(img).then(res => res.blob());
+        status.textContent = 'Sending to Astrometry.net...';
+
+        try {
+          const result = await sendToAstrometry(imageBlob);
+          status.textContent = 'Plate solving complete!';
+          resultsDiv.innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+          resultsDiv.style.display = 'block';
+        } catch (err) {
+          status.textContent = `Error: ${err.message}`;
+        }
+      });
+    }
+
+    async function sendToAstrometry(imageBlob) {
+      const API_KEY = apiKeyInput.value.trim();
+      if (!API_KEY) throw new Error('API key is required.');
+
+      const loginRes = await fetch('https://nova.astrometry.net/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `request-json=${encodeURIComponent(JSON.stringify({ apikey: API_KEY }))}`
+      });
+      const login = await loginRes.json();
+      if (login.status !== 'success') throw new Error('Astrometry login failed');
+      const session = login.session;
+
+      const formData = new FormData();
+      formData.append('request-json', JSON.stringify({
+        session: session,
+        publicly_visible: 'y',
+        allow_modifications: 'y',
+        allow_commercial_use: 'd'
+      }));
+      formData.append('session', session);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-'); // e.g., 2025-06-27T15-45-30-123Z
+      const filename = `vera_rubin_tile_${timestamp}.jpg`;
+      formData.append('file', imageBlob, filename);
+
+      const uploadRes = await fetch('https://nova.astrometry.net/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const upload = await uploadRes.json();
+      if (upload.status !== 'success') throw new Error('Upload failed');
+      const subId = upload.subid;
+
+      return await pollForJobCompletion(subId);
+    }
+
+    async function pollForJobCompletion(subId) {
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 10000));
+        const res = await fetch(`https://nova.astrometry.net/api/submissions/${subId}`);
+        const data = await res.json();
+        if (data.jobs.length) {
+          const user_image = data.user_images[0];
+          const jobId = data.jobs[0];
+          const jobRes = await fetch(`https://nova.astrometry.net/api/jobs/${jobId}`);
+          const job = await jobRes.json();
+    if (job.status === 'success') return {
+          "status": "success",
+          "url": `https://nova.astrometry.net/user_images/${user_image}`,
+    }
+          if (job.status === 'failure') throw new Error('Plate solving failed');
+        }
+      }
+      throw new Error('Plate solving timed out');
+    }
+
+    plateSolveBtn.addEventListener('click', () => {
+      plateSolvingEnabled = !plateSolvingEnabled;
+      plateSolveBtn.innerHTML = plateSolvingEnabled
+        ? '<i class="fas fa-ban"></i> Disable Plate Solving'
+        : '<i class="fas fa-crosshairs"></i> Enable Plate Solving';
+      status.textContent = plateSolvingEnabled
+        ? 'Click on the image to extract a tile and solve its coordinates'
+        : 'Click "Enable Plate Solving" then click on the image to solve coordinates';
+    });
+
+    saveApiKeyBtn.addEventListener('click', () => {
+      const apiKey = apiKeyInput.value.trim();
+      if (apiKey) status.textContent = 'API key saved.';
+    });
+  </script>
+  <div style="text-align: center; padding-right: 40px;">
+    <h4>If you like this, consider a <a target="_blank" href="https://www.healpalestine.org/donate/">donation</a></h4>
+  </div>    
 </body>
 </html>
 

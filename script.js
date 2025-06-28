@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }));
             formData.append('session', session);
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `astronomy_viewer_${timestamp}.jpg`;
+            const filename = `vera_rubin_viewer_${timestamp}.jpg`;
             formData.append('file', imageBlob, filename);
 
             const uploadRes = await fetch(uploadUrl, {

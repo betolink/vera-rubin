@@ -28,7 +28,7 @@ function createStars() {
 
 // CORS proxy function
 function getProxyUrl(url) {
-    return `https://cors-proxy.htmldriven.com/?url=${encodeURIComponent(url)}`;
+    return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 }
 
 // Main application logic
